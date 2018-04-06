@@ -67,7 +67,6 @@ public class TestForSeminar {
 
     private void runSimulationAndPrintResults() {
         simulation.start();
-
         List<Cloudlet> finishedCloudlets = broker.getCloudletFinishedList();
         new CloudletsTableBuilder(finishedCloudlets).build();
     }
@@ -75,6 +74,7 @@ public class TestForSeminar {
     private void createAndSetCloudlets(Vm vm) {
         int cloudletId;
         long length = 10000;
+        // To provide a lot different amount of cloudlets for one queue and 1 for other vms
         int num = vm.getId() != 0 ? 1 : (int)(Math.random()*NUMBER_OF_CLOUDLETS);
         for(int i = 0; i < num; i++){
             cloudletId = vm.getId() * 1000 + i;
@@ -130,7 +130,7 @@ public class TestForSeminar {
         long mips = 1000;
         for(int i = 0; i < HOST_PES_NUMBER; i++){
             peList.add(new PeSimple(mips, new PeProvisionerSimple()));
-        }
+        } // Number of PEs
         long ram = 2048; // host memory (MEGABYTEs)
         long storage = 1000000; // host storage (MEGABYTEs)
         long bw = 10000; //Megabits/s

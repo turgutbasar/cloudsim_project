@@ -17,12 +17,6 @@ public class DatacenterPowerSaverExample extends DatacenterSimple {
     public DatacenterPowerSaverExample(Simulation simulation, DatacenterCharacteristics characteristics, VmAllocationPolicy vmAllocationPolicy) {
         super(simulation, characteristics, vmAllocationPolicy);
     }
-    
-    @Override
-    protected double updateHostsProcessing() {
-        // Print Logs about host!
-        return super.updateHostsProcessing(); //To change body of generated methods, choose Tools | Templates.
-    }
 
     @Override
     protected double updateCloudletProcessing() {

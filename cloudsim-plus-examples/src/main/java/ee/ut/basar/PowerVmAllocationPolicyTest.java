@@ -1,5 +1,6 @@
 package ee.ut.basar;
 
+import static java.lang.Math.sqrt;
 import java.util.ArrayList;
 import org.cloudbus.cloudsim.hosts.Host;
 import org.cloudbus.cloudsim.vms.Vm;
@@ -19,11 +20,9 @@ public class PowerVmAllocationPolicyTest extends PowerVmAllocationPolicyAbstract
     }
 
     /**
-     * The method in this VmAllocationPolicy doesn't perform any
-     * VM placement optimization and, in fact, has no effect.
-     *
+     * 
      * @param vmList the list of VMs
-     * @return an empty map to indicate that it never performs optimization
+     * @return a map to perform optimization
      */
     @Override
     public Map<Vm, Host> optimizeAllocation(List<? extends Vm> vmList) {
@@ -99,5 +98,50 @@ public class PowerVmAllocationPolicyTest extends PowerVmAllocationPolicyAbstract
         }
         return migrationMap;
     }
+    
+    private float fitness(Map<Vm, Host> sol) {
+        float res = (float) 0.0;
+        /*for t in range(len(sol)):
+            for target in range(len(processes)):
+                for source in range(len(processes)):
+                    if sol[t][source][target] > 0:
+                        res += sol[t][source][target] * processes[source]["price_eq"];*/
+        return res;
+    }
+    
+    private Map<Vm, Host> sanneal(List<Host> hosts, Map<Vm, Host> c_sol, float alpha, float t_criteria, float i_criteria ){
+        Map<Vm, Host> cur_solution = c_sol;
+        Map<Vm, Host> best_solution = cur_solution;
+        int N = hosts.size();
+        float current_fitness = (float) 0.0;
+        current_fitness = fitness(cur_solution);
+        float best_fitness = current_fitness;
+        float temp = (float) sqrt(N);
+        int itr = 1;
+        while(temp >= t_criteria && itr < i_criteria) {
+            Map<Vm, Host> can = cur_solution;
 
+            float candidate_fitness = fitness(can);
+            if(candidate_fitness < current_fitness) {
+                cur_solution = can;
+                current_fitness = candidate_fitness;
+
+                if (candidate_fitness < best_fitness){
+                    System.out.println("Fitness :: " + best_fitness);
+                    best_fitness = candidate_fitness;
+                    best_solution = can;
+                }
+            } else {
+                if(Math.random() < Math.exp(-Math.abs(candidate_fitness-current_fitness) / temp) ){
+                    cur_solution = can;
+                    current_fitness = candidate_fitness;
+                }
+
+                temp *= alpha;
+                itr += 1;
+            }
+        }
+        return best_solution;
+    }
 }
+    
