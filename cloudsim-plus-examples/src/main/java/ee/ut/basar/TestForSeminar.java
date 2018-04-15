@@ -122,7 +122,7 @@ public class TestForSeminar {
             this.hostList.add(createHost(i));
         }
         DatacenterCharacteristics characteristics = new DatacenterCharacteristicsSimple(hostList);
-        return new DatacenterPowerSaverExample(simulation, characteristics, new PowerVmAllocationPolicyTest());
+        return new DatacenterPowerSaverExample(simulation, characteristics, new PowerVmAllocationPolicyTestFactory().enableSimulatedAnnealing(Boolean.TRUE).build());
     }
 
     private Host createHost(int id) {
