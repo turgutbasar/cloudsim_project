@@ -4,11 +4,11 @@ public class PowerVmAllocationPolicyTestFactory {
     
     private Boolean useSimulatedAnnealing = false;
     
-    private double alpha = 0.9999993;
+    private double alpha = 0.999993;
     
     private double t_criteria = 0.00001;
     
-    private double i_criteria = 1000000;
+    private double i_criteria = 100000;
 
     public PowerVmAllocationPolicyTestFactory enableSimulatedAnnealing(Boolean useSimulatedAnnealing) {
         this.useSimulatedAnnealing = useSimulatedAnnealing;

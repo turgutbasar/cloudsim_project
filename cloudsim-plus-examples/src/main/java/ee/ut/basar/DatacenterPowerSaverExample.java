@@ -8,7 +8,6 @@ import org.cloudbus.cloudsim.core.Simulation;
 import org.cloudbus.cloudsim.datacenters.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.datacenters.DatacenterSimple;
 import org.cloudbus.cloudsim.hosts.Host;
-import org.cloudbus.cloudsim.hosts.power.PowerHostSimple;
 import org.cloudbus.cloudsim.util.Log;
 import org.cloudbus.cloudsim.vms.Vm;
 
@@ -17,17 +16,30 @@ public class DatacenterPowerSaverExample extends DatacenterSimple {
     public DatacenterPowerSaverExample(Simulation simulation, DatacenterCharacteristics characteristics, VmAllocationPolicy vmAllocationPolicy) {
         super(simulation, characteristics, vmAllocationPolicy);
     }
+    
+    public int turn = 0;
+    
+    
 
     @Override
     protected double updateCloudletProcessing() {
+        turn++;
         final double nextSimulationTime = super.updateCloudletProcessing();
         if (nextSimulationTime == Double.MAX_VALUE){
             return nextSimulationTime;
         }
         
+        if ((turn * nextSimulationTime) < 4) {
+            return nextSimulationTime;
+        }
+        turn = 0;
+        
         // Remove Finished VMs
-        for (PowerHostSimple host : this.<PowerHostSimple>getHostList()) {
+        for (PowerHostExample host : this.<PowerHostExample>getHostList()) {
             for (Vm vm : host.getFinishedVms()) {
+                if (vm.isInMigration()) {
+                    continue;
+                }
                 getVmAllocationPolicy().deallocateHostForVm(vm);
                 Log.printFormattedLine(
                         String.format("%.2f: %s has been deallocated from %s",

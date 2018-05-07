@@ -2,14 +2,20 @@ package ee.ut.basar;
 
 import static java.lang.Math.sqrt;
 import java.util.ArrayList;
+import java.util.Collections;
 import org.cloudbus.cloudsim.hosts.Host;
 import org.cloudbus.cloudsim.vms.Vm;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
+import java.util.stream.Collectors;
+import org.cloudbus.cloudsim.allocationpolicies.VmAllocationPolicy;
 import org.cloudbus.cloudsim.allocationpolicies.power.PowerVmAllocationPolicyAbstract;
+import org.cloudbus.cloudsim.hosts.power.PowerHost;
+import org.cloudbus.cloudsim.util.Log;
 
 public class PowerVmAllocationPolicyTest extends PowerVmAllocationPolicyAbstract {
     
@@ -47,15 +53,70 @@ public class PowerVmAllocationPolicyTest extends PowerVmAllocationPolicyAbstract
         
         // Run vanilla implementation first
         final Map<Vm, Host> migrationMap = vanilla(vmList);
-        List<Host> hostlist = getHostList();
+        List<Host> hostlist = getHostList()
+                .stream()
+                .sorted()
+                .filter(h -> h.isActive())
+                .collect(Collectors.toList());
         // According to config, if needed run simulated annealing with result of vanilla to improve
         if (!useSimulatedAnnealing)
             return migrationMap;
         else
             return sanneal(hostlist, (List<Vm>)vmList, migrationMap, alpha, t_criteria, i_criteria);
+        
+        
+        // TODO : No Optimization ve Random Start Simulated Annealing Implement Edelim
     }
     
+    public PowerHost findDeactiveHostForVm(Vm vm) {
+        return this.<PowerHost>getHostList()
+                .stream()
+                .sorted()
+                .filter(h -> !h.isActive())
+                .filter(h -> h.isSuitableForVm(vm))
+                .findFirst().orElse(PowerHost.NULL);
+    }
+
+    @Override
+    public PowerHost findHostForVm(Vm vm) {
+        return this.<PowerHost>getHostList()
+                .stream()
+                .sorted()
+                .filter(h -> h.isActive())
+                .filter(h -> h.isSuitableForVm(vm))
+                .findFirst().orElse(PowerHost.NULL);
+    }
+
+    @Override
+    public boolean allocateHostForVm(Vm vm) {
+        Host host = findHostForVm(vm);
+        if (host == PowerHost.NULL) {
+            Log.printFormattedLine("%.2f: No suitable active host found for VM #" + vm.getId() + "\n", vm.getSimulation().clock());
+            host = findDeactiveHostForVm(vm);
+            if (host == PowerHost.NULL) {
+                Log.printFormattedLine("%.2f: No suitable host found for VM #" + vm.getId() + " at all.\n", vm.getSimulation().clock());
+                return false;
+            }
+            host.setActive(true);
+            Log.printFormattedLine("%.2f: Host #" + host.getId() + " is switched on.\n", vm.getSimulation().clock());
+        }
+        return allocateHostForVm(vm, host);
+    }
+
+    @Override
+    public void deallocateHostForVm(Vm vm) {
+        if (vm.getHost().getVmList().size() == 1) {
+            // If after this vm host empty, we set it deactive
+            vm.getHost().setActive(false);
+            Log.printFormattedLine("%.2f: Host #" + vm.getHost().getId() + " is switched off.\n", vm.getSimulation().clock());
+        }
+        super.deallocateHostForVm(vm); //To change body of generated methods, choose Tools | Templates.
+    }
+    
+    
+    
     private Map<Vm, Host> shuffle(Map<Vm, Host> sol, List<Vm> vms, List<Host> hosts) {
+        // TODO : Keep track of temporary host statuses to prevent failed migrations.
         Map<Vm, Host> shuffeled = new HashMap<>();
         int split = new Random().nextInt(vms.size());
         split = split == 0 ? 0 : split-1;
@@ -78,24 +139,28 @@ public class PowerVmAllocationPolicyTest extends PowerVmAllocationPolicyAbstract
     
     private double fitness(List<Host> hosts, Map<Vm, Host> sol) {
         double cost = 0.0;
-        Map<Host, Vm> hostList_clone = new HashMap<>();
+        Map<Vm, Host> hostmap_clone = new HashMap<>();
         for (Host host : hosts) {
             List<Vm> host_vms = host.getVmList();
-            for (Vm host_vm : host_vms) {
-                hostList_clone.put(host, host_vm);
+            for (Vm vm : host_vms) {
+                hostmap_clone.put(vm, host);
             }
         }
         
         for (Map.Entry<Vm, Host> entry : sol.entrySet()) {
-            Vm key = entry.getKey();
-            Host value = entry.getValue();
-            hostList_clone.remove(value);
-            hostList_clone.put(value, key);
+            Vm vm = entry.getKey();
+            Host host = entry.getValue();
+            hostmap_clone.remove(vm);
+            hostmap_clone.put(vm, host);
             cost += 100; // Static cost per migration
         }
         
-        for (Host host : hostList_clone.keySet()) {
-            cost += 1000; // Static cost per machine same period
+        List<Host> hlist = new ArrayList();
+        for (Entry<Vm, Host> ent : hostmap_clone.entrySet()) {
+            if (!hlist.contains(ent.getValue())) {
+                hlist.add(ent.getValue());
+                cost += 1000; // Static cost per machine same period
+            }
         }
         return cost;
     }
@@ -142,45 +207,43 @@ public class PowerVmAllocationPolicyTest extends PowerVmAllocationPolicyAbstract
         for (Host host : hostlist) {
             int hostTotal = 0;
             if (!host.isActive()) {
+                available.remove(host);
                 continue;
             }
+            // Overload Case
+            double av = host.getAvailableMips();
+            double total = host.getTotalMipsCapacity();
             if (host.getAvailableMips() < 0.2 * host.getTotalMipsCapacity()) {
                 migration.addAll(host.getVmList());
                 List<Vm> vms = host.getVmList();
-                for ( Vm vm : vms) {
-                    hostTotal += vm.getNumberOfPes();
-                    if (hostTotal > (host.getNumberOfPes() * 0.8)) {
+                for (Vm vm : vms) {
+                    if (vm.isInMigration()) {
+                        migration.remove(vm);
+                    }
+                    hostTotal += vm.getMips();
+                    if (hostTotal > (host.getTotalMipsCapacity() * 0.8)) {
                         break;
                     }
                     migration.remove(vm);
                 }
                 available.remove(host);
             }
+            // TODO : Implement Underload
         }
         for (Host host : available) {
-            int hostTotal = 0;
-            if (!host.isActive()) {
-                continue;
-            }
             List<Vm> vmsToMigrate = new ArrayList<>();
-            if(migration.size() < 1) {
-                boolean active = false;
-                for (Vm vm : host.getVmList()) {
-                    if (!vm.getCloudletScheduler().isEmpty()) {
-                        active = true;
-                    }
-                }
-                if (!active) {
-                    host.setActive(false);
-                    System.out.println("Host Power Off" + host.toString());
-                }
-            }
+            int migDiffTotal = 0;/*
+            for ( Vm vm : host.getVmsMigratingIn()){
+                migDiffTotal += vm.getMips();
+            }*/
             for ( Vm vm : migration) {
-                hostTotal += vm.getNumberOfPes();
-                if (hostTotal > host.getNumberOfPes() * 0.8) {
+                if (host.getAvailableMips() - migDiffTotal - vm.getMips() < 0.2 * host.getTotalMipsCapacity()) {
                     break;
                 }
-                vmsToMigrate.add(vm);
+                if (host.isSuitableForVm(vm)) {
+                    vmsToMigrate.add(vm);
+                    migDiffTotal += vm.getNumberOfPes();
+                }
             }
             for ( Vm vm : vmsToMigrate) {
                 migrationMap.put(vm, host);
@@ -193,6 +256,7 @@ public class PowerVmAllocationPolicyTest extends PowerVmAllocationPolicyAbstract
             for (Host host : getHostList()) {
                 if (!host.isActive()) {
                     host.setActive(true);
+                    Log.printFormattedLine("%.2f: Host #" + host.getId() + " is switched on.\n", host.getSimulation().clock());
                     tmp = host;
                     break;
                 }

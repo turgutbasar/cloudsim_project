@@ -1,7 +1,5 @@
 package ee.ut.basar;
 
-import org.cloudsimplus.builders.tables.CloudletsTableBuilder;
-
 import java.util.ArrayList;
 import java.util.List;
 import org.cloudbus.cloudsim.cloudlets.Cloudlet;
@@ -15,30 +13,25 @@ import org.cloudbus.cloudsim.hosts.Host;
 import org.cloudbus.cloudsim.util.Log;
 import org.cloudbus.cloudsim.resources.Pe;
 import org.cloudbus.cloudsim.resources.PeSimple;
-import org.cloudbus.cloudsim.utilizationmodels.UtilizationModel;
 import org.cloudbus.cloudsim.utilizationmodels.UtilizationModelFull;
 import org.cloudbus.cloudsim.vms.Vm;
 import org.cloudbus.cloudsim.vms.VmSimple;
 import org.cloudbus.cloudsim.schedulers.vm.VmSchedulerTimeShared;
 import org.cloudbus.cloudsim.core.CloudSim;
-import org.cloudbus.cloudsim.hosts.power.PowerHostSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.ResourceProvisionerSimple;
 import org.cloudbus.cloudsim.schedulers.cloudlet.CloudletSchedulerSpaceShared;
 
 public class TestForSeminar {
 
-    private static final int HOST_PES_NUMBER = 20;
-
-    private static final int VM_PES_NUMBER = 3;
-
-    private static final int NUMBER_OF_CLOUDLETS = 100;
-
     private final List<Host> hostList;
+    
     private final List<Vm> vmList;
-    private final List<Cloudlet> cloudletList;
+    
     private final DatacenterBroker broker;
+    
     private final Datacenter datacenter;
+    
     private final CloudSim simulation;
 
     public static void main(String[] args) {
@@ -48,96 +41,113 @@ public class TestForSeminar {
     }
 
     public TestForSeminar() {
-        simulation = new CloudSim();
-
+        
+        this.simulation = new CloudSim();
         this.hostList = new ArrayList<>();
         this.vmList = new ArrayList<>();
-        this.cloudletList = new ArrayList<>();
-        this.datacenter = createDatacenter();
+        this.datacenter = createBasarDatacenter(600, 100);
         this.broker = new DatacenterBrokerSimple(simulation);
 
-        createAndSubmitVms();
-        for (Vm vm : vmList) {
-            createAndSetCloudlets(vm);
-        }
-        this.broker.submitCloudletList(cloudletList);
+        createAndSubmitTestVms(600, 100);
         
+        createAndSubmitTestCloudlets();
+        
+        // TODO : Print table olayını düzeltelim
         runSimulationAndPrintResults();
     }
 
     private void runSimulationAndPrintResults() {
-        simulation.start();
-        List<Cloudlet> finishedCloudlets = broker.getCloudletFinishedList();
-        new CloudletsTableBuilder(finishedCloudlets).build();
+        this.simulation.start();
+        
+        /*List<Cloudlet> finishedCloudlets = broker.getCloudletFinishedList();
+        new CloudletsTableBuilder(finishedCloudlets).build();*/
     }
 
-    private void createAndSetCloudlets(Vm vm) {
-        int cloudletId;
-        long length = 10000;
-        // To provide a lot different amount of cloudlets for one queue and 1 for other vms
-        int num = vm.getId() != 0 ? 1 : (int)(Math.random()*NUMBER_OF_CLOUDLETS);
-        for(int i = 0; i < num; i++){
-            cloudletId = vm.getId() * 1000 + i;
-            Cloudlet cloudlet = createCloudlet(cloudletId, vm, (int)(Math.random()*length));
-            this.cloudletList.add(cloudlet);
+    private void createAndSubmitTestCloudlets() {
+        for (Vm vm : this.vmList) {
+            long length = 1;
+            int n_cloudlets = (int)(Math.random()*100);
+            long pes = vm.getNumberOfPes() - 1;
+            pes = pes == -1 ? 0 : pes;
+            for(int i = 0; i < n_cloudlets; i++){
+                Cloudlet cloudlet = createCloudlet(vm.getId() * 1000 + i, vm, (int)(Math.random()*length) + 1, (int)(Math.random()*pes) + 1);
+                cloudlet.setVm(vm);
+                this.broker.submitCloudlet(cloudlet);
+            }
         }
     }
 
-    private void createAndSubmitVms() {
-        for (int i = 0; i < 5; i++) {
-            this.vmList.add(createVm(i));
+    private void createAndSubmitTestVms(int pes, int mips) {
+        int i = 0;
+        int time_interval = 60;
+        while (pes > 0) {
+            List vv = new ArrayList();
+            int pes_vm;
+            if (pes < 11) {
+                pes_vm = pes;
+            } else {
+                pes_vm = (int)(Math.random() * 10) + 1;
+            }
+            pes -= pes_vm;
+            Vm vm = createVm(i, pes_vm, mips);
+            int delay = (int)(Math.random()*time_interval);
+            vv.add(vm);
+            this.broker.submitVmList(vv, delay);
+            vmList.add(vm);
+            ++i;
         }
-        this.broker.submitVmList(vmList);
+        
     }
 
-    private Vm createVm(int id) {
-        int mips = 1000;
-        long size = 10000; // image size (MEGABYTE)
-        int ram = 512; // vm memory (MEGABYTE)
-        long bw = 1000;
-        Vm vm = new VmSimple(id, mips, VM_PES_NUMBER)
+    private Vm createVm(int id, int pes, int mips) {
+        long size = 10; // image size (MEGABYTE)
+        int ram = 5; // vm memory (MEGABYTE)
+        long bw = 10;
+        return new VmSimple(id, mips, pes)
             .setRam(ram).setBw(bw).setSize(size)
             .setCloudletScheduler(new CloudletSchedulerSpaceShared());
-
-        return vm;
     }
 
-    private Cloudlet createCloudlet(int id, Vm vm, long length) {
+    private Cloudlet createCloudlet(int id, Vm vm, long length, int pes) {
         long fileSize = 300;
         long outputSize = 300;
-        int pesNumber = (int)(Math.random()*4) + 1;
-        UtilizationModel utilizationModel = new UtilizationModelFull();
-        Cloudlet cloudlet
-            = new CloudletSimple(id, (int)(Math.random()*length) + 1, pesNumber)
+        return new CloudletSimple(id, (int)(Math.random()*length) + 1, pes)
                     .setFileSize(fileSize)
                     .setOutputSize(outputSize)
-                    .setUtilizationModel(utilizationModel)
+                    .setUtilizationModel(new UtilizationModelFull())
                     .setVm(vm);
-        
-        return cloudlet;
     }
 
-    private Datacenter createDatacenter() {
-        for (int i = 0; i < 5; i++) {
-            this.hostList.add(createHost(i));
-        }
-        DatacenterCharacteristics characteristics = new DatacenterCharacteristicsSimple(hostList);
-        return new DatacenterPowerSaverExample(simulation, characteristics, new PowerVmAllocationPolicyTestFactory().enableSimulatedAnnealing(Boolean.TRUE).build());
-    }
-
-    private Host createHost(int id) {
+    private Host createHost(int id, int pes, int mips) {
         List<Pe> peList = new ArrayList<>();
-        long mips = 1000;
-        for(int i = 0; i < HOST_PES_NUMBER; i++){
+        for(int i = 0; i < pes; i++){
             peList.add(new PeSimple(mips, new PeProvisionerSimple()));
         } // Number of PEs
         long ram = 2048; // host memory (MEGABYTEs)
         long storage = 1000000; // host storage (MEGABYTEs)
         long bw = 10000; //Megabits/s
 
-        return new PowerHostSimple(ram, bw, storage, peList)
+        return new PowerHostExample(ram, bw, storage, peList)
             .setRamProvisioner(new ResourceProvisionerSimple())
             .setBwProvisioner(new ResourceProvisionerSimple())
-            .setVmScheduler(new VmSchedulerTimeShared());
+            .setVmScheduler(new VmSchedulerTimeShared(0.0))
+            .setActive(false);
+    }
+
+    private Datacenter createBasarDatacenter(int pes, int mips) {
+        int i = 0;
+        while (pes > 0) {
+            int pes_host;
+            if (pes < 40) {
+                pes_host = pes;
+            } else {
+                pes_host = (int)(Math.random() * 30) + 10;
+            }
+            pes -= pes_host;
+            this.hostList.add(createHost(i, pes_host, mips));
+            ++i;
+        }
+        DatacenterCharacteristics characteristics = new DatacenterCharacteristicsSimple(hostList);
+        return new DatacenterPowerSaverExample(simulation, characteristics, new PowerVmAllocationPolicyTestFactory().enableSimulatedAnnealing(Boolean.TRUE).build());
     }
 }
